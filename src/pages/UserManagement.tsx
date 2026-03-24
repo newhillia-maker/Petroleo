@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, 
   Search, 
@@ -11,9 +11,11 @@ import {
   Edit2,
   X,
   Check,
-  User
+  User,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 type AccessLevel = 'Administrator' | 'Operator' | 'Auditor';
 
@@ -35,12 +37,46 @@ const initialUsers: SystemUser[] = [
 ];
 
 export function UserManagement() {
-  const [users, setUsers] = useState<SystemUser[]>(initialUsers);
+  const [users, setUsers] = useState<SystemUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('system_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const mappedUsers: SystemUser[] = data.map(u => ({
+          id: u.operator_id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          accessLevel: u.access_level as AccessLevel,
+          status: u.status as 'Active' | 'Suspended',
+          lastLogin: u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'
+        }));
+        setUsers(mappedUsers);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -79,19 +115,43 @@ export function UserManagement() {
     setEditingUser(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUser) {
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
-    } else {
-      const newUser: SystemUser = {
-        id: `USR-00${users.length + 1}`,
-        ...formData,
-        lastLogin: 'Never'
-      };
-      setUsers([...users, newUser]);
+    try {
+      if (editingUser) {
+        const { error } = await supabase
+          .from('system_users')
+          .update({
+            name: formData.name,
+            email: formData.email,
+            role: formData.role,
+            access_level: formData.accessLevel,
+            status: formData.status
+          })
+          .eq('operator_id', editingUser.id);
+
+        if (error) throw error;
+      } else {
+        const operatorId = `USR-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+        const { error } = await supabase
+          .from('system_users')
+          .insert([{
+            operator_id: operatorId,
+            name: formData.name,
+            email: formData.email,
+            role: formData.role,
+            access_level: formData.accessLevel,
+            status: formData.status
+          }]);
+
+        if (error) throw error;
+      }
+      await fetchUsers();
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      alert('Failed to save user. Please check your Supabase configuration.');
     }
-    handleCloseModal();
   };
 
   const handleDelete = (id: string) => {
@@ -99,11 +159,23 @@ export function UserManagement() {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (userToDelete) {
-      setUsers(users.filter(u => u.id !== userToDelete));
-      setIsDeleteModalOpen(false);
-      setUserToDelete(null);
+      try {
+        const { error } = await supabase
+          .from('system_users')
+          .delete()
+          .eq('operator_id', userToDelete);
+
+        if (error) throw error;
+        
+        await fetchUsers();
+        setIsDeleteModalOpen(false);
+        setUserToDelete(null);
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user.');
+      }
     }
   };
 
@@ -148,7 +220,13 @@ export function UserManagement() {
         </div>
         
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 className="animate-spin text-primary" size={32} />
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Synchronizing with Ledger...</p>
+            </div>
+          ) : (
+            <table className="w-full text-left">
             <thead>
               <tr className="bg-surface-container-low">
                 <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Operator</th>
@@ -217,6 +295,7 @@ export function UserManagement() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </div>
 
