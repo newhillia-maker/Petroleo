@@ -13,6 +13,7 @@ import { FuelBatches } from './pages/FuelBatches';
 import { BlockchainRecords } from './pages/BlockchainRecords';
 import { TransactionDetail } from './pages/TransactionDetail';
 import { UserManagement } from './pages/UserManagement';
+import { Alerts } from './pages/Alerts';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -35,8 +36,8 @@ export default function App() {
           <Route path="/records" element={<BlockchainRecords />} />
           <Route path="/records/:id" element={<TransactionDetail />} />
           <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/alerts" element={<Alerts />} />
           <Route path="/shipments" element={<Dashboard />} />
-          <Route path="/alerts" element={<Dashboard />} />
           <Route path="/analytics" element={<Dashboard />} />
           <Route path="/settings" element={<Dashboard />} />
         </Route>

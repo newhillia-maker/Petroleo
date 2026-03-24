@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Fuel, 
   ShieldCheck, 
@@ -8,11 +8,13 @@ import {
   ArrowDownRight, 
   MoreHorizontal,
   ExternalLink,
-  MapPin
+  MapPin,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { KpiCard } from '../components/KpiCard';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 import { 
   BarChart, 
   Bar, 
@@ -43,6 +45,31 @@ const transactions = [
 ];
 
 export function Dashboard() {
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [isLoadingAlerts, setIsLoadingAlerts] = useState(true);
+
+  useEffect(() => {
+    fetchLatestAlerts();
+  }, []);
+
+  const fetchLatestAlerts = async () => {
+    setIsLoadingAlerts(true);
+    try {
+      const { data, error } = await supabase
+        .from('system_alerts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      if (error) throw error;
+      if (data) setAlerts(data);
+    } catch (error) {
+      console.error('Error fetching dashboard alerts:', error);
+    } finally {
+      setIsLoadingAlerts(false);
+    }
+  };
+
   return (
     <div className="space-y-10">
       <div className="flex justify-between items-end">
@@ -149,26 +176,41 @@ export function Dashboard() {
             <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest">Live</span>
           </div>
           <div className="space-y-4 flex-1">
-            <div className="p-4 bg-white/10 rounded-xl border border-white/10 hover:bg-white/15 transition-colors cursor-pointer group">
-              <div className="flex justify-between items-start mb-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Batch B-9282</p>
-                <ArrowUpRight size={14} className="text-white/40 group-hover:text-white transition-colors" />
+            {isLoadingAlerts ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <Loader2 className="animate-spin text-white/40" size={24} />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Syncing Alerts...</p>
               </div>
-              <p className="text-sm font-bold text-white mb-1">Hash Mismatch Detected</p>
-              <p className="text-xs text-white/60 leading-relaxed">Singapore Port Node reported inconsistent ledger entry.</p>
-            </div>
-            <div className="p-4 bg-white/10 rounded-xl border border-white/10 hover:bg-white/15 transition-colors cursor-pointer group">
-              <div className="flex justify-between items-start mb-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Node Rotterdam</p>
-                <ArrowUpRight size={14} className="text-white/40 group-hover:text-white transition-colors" />
+            ) : alerts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <ShieldCheck className="text-white/40" size={24} />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">No Alerts</p>
               </div>
-              <p className="text-sm font-bold text-white mb-1">High Latency Warning</p>
-              <p className="text-xs text-white/60 leading-relaxed">Synchronization delay exceeding 500ms threshold.</p>
-            </div>
+            ) : (
+              alerts.map((alert) => (
+                <Link 
+                  key={alert.id}
+                  to="/alerts"
+                  className="block p-4 bg-white/10 rounded-xl border border-white/10 hover:bg-white/15 transition-colors cursor-pointer group"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+                      {alert.batch_id || alert.node_id || 'System'}
+                    </p>
+                    <ArrowUpRight size={14} className="text-white/40 group-hover:text-white transition-colors" />
+                  </div>
+                  <p className="text-sm font-bold text-white mb-1">{alert.title}</p>
+                  <p className="text-xs text-white/60 leading-relaxed line-clamp-2">{alert.message}</p>
+                </Link>
+              ))
+            )}
           </div>
-          <button className="mt-8 w-full py-3 bg-white text-primary font-headline font-black text-xs uppercase tracking-widest rounded-xl hover:bg-zinc-100 transition-colors">
+          <Link 
+            to="/alerts"
+            className="mt-8 w-full py-3 bg-white text-primary font-headline font-black text-xs uppercase tracking-widest rounded-xl hover:bg-zinc-100 transition-colors text-center"
+          >
             View All Alerts
-          </button>
+          </Link>
         </div>
       </div>
 
